@@ -75,4 +75,11 @@ assert.match(noId.row.Flags, /Missing: lead id/); assert.match(noId.row['LSQ Lea
 // 4. impossible dates are treated as missing, not rolled over
 assert.equal(fromLsq({ ...base, mx_Move_in_Date: '31/2/2026' }).moveIn, '');
 assert.equal(fromLsq({ ...base, mx_Move_in_Date: '2026-02-30' }).moveIn, '');
+// email channel: a contact with only an Email still counts; alerts carry a subject
+const SE = [{ Role: 'Wing Ops', Wing: 'A', Name: 'Asha', WhatsApp: '', Email: 'asha@example.com' }];
+const e = buildTask(L, now, SE, null);
+assert.equal(e.to, null); assert.equal(e.email, 'asha@example.com'); assert.equal(e.row.Flags, '');
+assert.equal(e.subject, 'New move-in: Priya S, Wing A A-204 R1 bed 2 – ready by Fri 30 Oct 18:00');
+assert.equal(t.subject, '⚠ New move-in: Priya S, Wing A A-204 R1 bed 2 – no move-in date');
+assert.equal(ok.email, '');
 console.log('handoff ok');

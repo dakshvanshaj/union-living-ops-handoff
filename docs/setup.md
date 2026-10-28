@@ -26,14 +26,14 @@ Received at, LSQ Lead ID, Tenant, Phone, Gender, Wing, Flat, Room, Bed, Room Cat
 - Format `Received at`, `Move-in date` and `Ready-by` as plain text (Format → Number → Plain text). Otherwise dates
   that Ops retypes won't count in the Monday summary.
 
-**`Settings`**: headers `Role, Wing, Name, WhatsApp`:
+**`Settings`**: headers `Role, Wing, Name, WhatsApp, Email`:
 
-| Role | Wing | Name | WhatsApp |
-|---|---|---|---|
-| Trigger stage | | Closed Won | |
-| Wing Ops | A | *name* | *number* |
-| Wing Ops | B | *name* | *number* |
-| Ops Head | | *name* | *number* |
+| Role | Wing | Name | WhatsApp | Email |
+|---|---|---|---|---|
+| Trigger stage | | Closed Won | | |
+| Wing Ops | A | *name* | *number* | *email* |
+| Wing Ops | B | *name* | *number* | *email* |
+| Ops Head | | *name* | *number* | *email* |
 
 - Format the WhatsApp column as plain text, and write numbers with the country code, e.g. `919800000001`.
 - `Ops Head` is the fallback when a wing has no contact.
@@ -41,7 +41,7 @@ Received at, LSQ Lead ID, Tenant, Phone, Gender, Wing, Flat, Room, Bed, Room Cat
 
 ## 3. Credentials in n8n
 
-- **Google Sheets OAuth2:**
+- **Google Sheets OAuth2 and Gmail OAuth2** (one OAuth client covers both; enable the Sheets, Drive and Gmail APIs):
   1. In Google Cloud, create an OAuth client with redirect URI `http://localhost:5678/rest/oauth2-credential/callback`.
   2. Add the credential in n8n and sign in.
 - **WhatsApp:**

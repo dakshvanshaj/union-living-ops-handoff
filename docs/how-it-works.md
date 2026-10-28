@@ -11,7 +11,8 @@ flowchart LR
   B -->|yes| Q[Ops Queue sheet<br/>add or update]
   Q --> C{Ops contact?}
   C -->|yes| W[WhatsApp alert]
-  M[Monday 09:00] --> R[Read Ops Queue] --> RS[Read Settings] --> SUM[Build summary] --> W2[WhatsApp to each contact]
+  C -->|yes| G[Email alert]
+  M[Monday 09:00] --> R[Read Ops Queue] --> RS[Read Settings] --> SUM[Build summary] --> W2[WhatsApp + email to each contact]
 ```
 
 All the business rules live in one file, `handoff.js`. `build.js` copies it into the workflow's Code nodes, so the
@@ -72,7 +73,8 @@ It goes to every Ops contact listed in Settings, as the agenda for the Monday re
   - Every lead is invented. `send-test.sh` posts a LeadSquared-shaped lead.
   - The LeadSquared field names (`ProspectID`, `mx_Wing`, `mx_Move_in_Date`, ...) are an assumption. To go live,
     capture one real webhook payload and change `fromLsq()` in `handoff.js`. It's the only place that knows those names.
-  - WhatsApp uses Meta's free test number. In production it would go through a WhatsApp provider such as WATI
+  - WhatsApp uses Meta's free test number. Meta currently refuses sends until the account has billing set up, so email carries the demo; each WhatsApp step is set to continue on error.
+    Settings has an `Email` column; a contact needs a WhatsApp number or an email. In production it would go through a WhatsApp provider such as WATI
     (`n8n-nodes-wati`, Send Template Message) with an approved message template.
 
 ## Files

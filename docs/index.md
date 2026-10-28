@@ -1,7 +1,7 @@
 # CRM → Ops move-in handoff
 
 A small n8n automation for a co-living operator. When Sales closes a booking in LeadSquared, Ops hears about it
-within seconds, with the date the room has to be ready. Every Monday morning there's a summary of what's coming
+within seconds (WhatsApp and email), with the date the room has to be ready. Every Monday morning there's a summary of what's coming
 up and what's overdue.
 
 ## The problem
@@ -28,7 +28,7 @@ This workflow makes that process run without anyone having to remember it.
 2. The workflow checks what Ops needs (bed, move-in date, gender, sales owner, phone) and flags anything missing in plain words.
 3. It works out **Ready-by**, the time the room must be ready ([rules](how-it-works.md#ready-by-rule)).
 4. It adds the task to the **Ops Queue** Google Sheet, or updates it if the same lead comes in again.
-5. It sends a WhatsApp to that wing's Ops contact.
+5. It alerts that wing's Ops contact on WhatsApp and by email.
 6. **Every Monday at 09:00 IST**, everyone listed gets the move-in review.
 
 Ops closes the loop in the Sheet by changing Status: `Pending Move In → Ready → Moved In`. There's no new app to learn.
@@ -66,7 +66,8 @@ Full list: <sheet link>
 |---|---|
 | Rules (Ready-by, flags, Monday summary) | Built and tested, in Node and inside n8n |
 | Workflow in n8n | Built, imported, webhook live with a secret header |
-| Google Sheet + WhatsApp end-to-end | Waiting on account setup |
+| Email alerts + Google Sheet end-to-end | Waiting on Google sign-in |
+| WhatsApp alerts | Wired and switched on. Meta refuses sends until the WhatsApp account has billing set up, so a failed WhatsApp never stops the email |
 | Real LeadSquared connection | Sample payloads only. The field names are an assumption until one real payload is captured |
 
 Next: [how it works](how-it-works.md) · [set it up](setup.md)

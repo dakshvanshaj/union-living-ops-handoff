@@ -42,10 +42,10 @@
       "typeVersion": 1,
       "position": [
         1060,
-        190
+        260
       ],
       "parameters": {
-        "content": "### WhatsApp\nDemo: Meta WhatsApp Cloud API test number (plain text, inside the 24h window).\nProduction: swap for the WATI node (`n8n-nodes-wati` → Send Template Message) with an approved utility template.",
+        "content": "### WhatsApp + email\nEmail (Gmail) carries the demo. WhatsApp is wired and live; Meta refuses sends until the account has billing set up, so a failed WhatsApp never stops the email.\nProduction: swap for the WATI node (`n8n-nodes-wati` → Send Template Message) with an approved utility template.",
         "width": 460,
         "height": 200,
         "color": 4
@@ -171,7 +171,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Business rules for the CRM -> Ops move-in handoff.\n// Pure functions; the same text is inlined into the n8n Code nodes by build.js.\n// All times are IST wall-clock, held as \"fake UTC\" Dates (read with getUTC*), so host timezone never matters.\n\nconst DAY = 86400000;\nconst IST_MS = 330 * 60000;\nconst DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\nconst OPEN = ['Pending Move In', 'Not Ready'];\n\nconst ist = (d) => new Date(d.getTime() + IST_MS);\nconst pad = (n) => String(n).padStart(2, '0');\nconst fmt = (f) => `${f.getUTCFullYear()}-${pad(f.getUTCMonth() + 1)}-${pad(f.getUTCDate())} ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}`;\nconst nice = (f, time) => `${DOW[f.getUTCDay()]} ${f.getUTCDate()} ${MON[f.getUTCMonth()]}` + (time ? ` ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}` : '');\n// 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[...]' -> fake-UTC Date, or null\nfunction parseWall(s) {\n  const m = String(s || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{2}):(\\d{2}))?/);\n  return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0))) : null;\n}\n\n// Blank everywhere means '', 'NaN', 'N/A' or missing (same rule as the allotment cleaning).\nfunction clean(v) {\n  const s = v == null ? '' : String(v).trim();\n  return ['', 'nan', 'n/a'].includes(s.toLowerCase()) ? '' : s;\n}\n\nfunction toIsoDate(v) {\n  const s = clean(v);\n  let y, mo, d, m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];\n  else if ((m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/))) [y, mo, d] = [+m[3], +m[2], +m[1]]; // day-first, as proven on the allotment data\n  else return '';\n  const t = new Date(Date.UTC(y, mo - 1, d));\n  if (t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return ''; // 31/2 etc.: treat as missing, never roll over\n  return `${y}-${pad(mo)}-${pad(d)}`; // ponytail: unparseable date is treated as missing and flagged; add a separate \"bad date\" flag if LSQ ever sends one\n}\n\n// The ONLY place that knows LeadSquared field names. Capture one real webhook payload and adjust here.\nfunction fromLsq(body) {\n  const b = body || {};\n  const wing = clean(b.mx_Wing).match(/^([ab])\\b/i);\n  const room = clean(b.mx_Room).match(/^(?:r|room)\\s*(\\d+)$/i);\n  const g = clean(b.mx_Gender);\n  return {\n    leadId: clean(b.ProspectID),\n    tenant: [clean(b.FirstName), clean(b.LastName)].filter(Boolean).join(' '),\n    phone: clean(b.Phone),\n    gender: g ? g[0].toUpperCase() + g.slice(1).toLowerCase() : '',\n    wing: wing ? wing[1].toUpperCase() : clean(b.mx_Wing),\n    flat: clean(b.mx_Flat_No),\n    room: room ? 'R' + room[1] : clean(b.mx_Room),\n    bed: clean(b.mx_Bed),\n    category: clean(b.mx_Room_Category),\n    moveIn: toIsoDate(b.mx_Move_in_Date),\n    owner: clean(b.OwnerIdName),\n    stage: clean(b.ProspectStage),\n  };\n}\n\nfunction isTrigger(lead, stage) {\n  return lead.stage.toLowerCase() === String(stage || '').trim().toLowerCase();\n}\n\n// Founder's Fix rule: room Ready 2 working days (Mon-Fri) before move-in;\n// Sat/Sun/Mon move-ins by Friday 12:00; later requests for those get a Saturday 12:00 slot.\n// ponytail: public holidays ignored; add a Holidays tab if Ops asks.\nfunction readyBy(moveIn, receivedAt) {\n  const mv = parseWall(moveIn);\n  if (!mv) return { readyBy: '', flag: 'No date – chase Sales' };\n  const rcv = ist(receivedAt);\n  const dow = mv.getUTCDay();\n  if (dow === 6 || dow === 0 || dow === 1) {\n    const fri = new Date(mv.getTime() - { 6: 1, 0: 2, 1: 3 }[dow] * DAY + 12 * 3600000);\n    if (rcv <= fri) return { readyBy: fmt(fri), flag: '' };\n    const sat = new Date(fri.getTime() + DAY);\n    if (rcv <= sat) return { readyBy: fmt(sat), flag: 'Late request → Saturday slot' };\n    return { readyBy: fmt(fri), flag: 'Already late' };\n  }\n  let d = mv.getTime();\n  for (let n = 0; n < 2;) { d -= DAY; const w = new Date(d).getUTCDay(); if (w !== 0 && w !== 6) n++; }\n  const due = new Date(d + 18 * 3600000);\n  return { readyBy: fmt(due), flag: rcv <= due ? '' : 'Already late' };\n}\n\nfunction contactFor(wing, settings) {\n  const s = settings || [];\n  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && clean(r.WhatsApp))\n    || s.find((r) => r.Role === 'Ops Head' && clean(r.WhatsApp));\n  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp) } : null;\n}\n\nconst REQUIRED = [['leadId', 'lead id'], ['tenant', 'tenant name'], ['phone', 'phone'], ['wing', 'wing'], ['room', 'room'], ['bed', 'bed'], ['gender', 'gender'], ['moveIn', 'move-in date'], ['owner', 'sales owner']];\n\n// existing = the Ops Queue row already holding this lead, or null. An update keeps Ops' Status and the first arrival time.\nfunction buildTask(lead, receivedAt, settings, existing) {\n  const flags = [];\n  const missing = REQUIRED.filter(([k]) => !lead[k]).map(([, label]) => label);\n  if (missing.length) flags.push('Missing: ' + missing.join(', '));\n  // Lateness is judged from when Ops first heard of this move-in date, so a later CRM edit doesn't make it \"late\".\n  const first = existing && existing['Move-in date'] === lead.moveIn && parseWall(existing['Received at']);\n  const rb = readyBy(lead.moveIn, first ? new Date(first.getTime() - IST_MS) : receivedAt);\n  if (rb.flag) flags.push(rb.flag);\n  const c = contactFor(lead.wing, settings);\n  if (!c) flags.push(`No Ops contact for wing ${lead.wing || '?'}`);\n  const row = {\n    'Received at': (existing && existing['Received at']) || fmt(ist(receivedAt)), 'LSQ Lead ID': lead.leadId || `no-id-${receivedAt.getTime()}`, Tenant: lead.tenant, Phone: lead.phone,\n    Gender: lead.gender, Wing: lead.wing, Flat: lead.flat, Room: lead.room, Bed: lead.bed, 'Room Category': lead.category,\n    'Move-in date': lead.moveIn, 'Ready-by': rb.readyBy, 'Sales owner': lead.owner, Status: (existing && existing.Status) || 'Pending Move In', Flags: flags.join('; '),\n  };\n  const q = (v) => v || '?';\n  const mv = parseWall(lead.moveIn), due = parseWall(rb.readyBy);\n  const when = mv ? `Move-in ${nice(mv)}, room Ready by ${nice(due, true)}.` : 'Move-in date not set.';\n  let text = `New move-in: ${q(lead.tenant)} (${q(lead.gender)}), Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)}. ${when} Sales: ${q(lead.owner)}.`;\n  if (row.Flags) text = `⚠ ${row.Flags}. ${text}`;\n  if (existing) text = `Updated: ${text}`;\n  return { row, to: c ? c.WhatsApp : null, text };\n}\n\n// Monday agenda for the 10-minute move-in review.\nfunction mondaySummary(rows, now, sheetUrl) {\n  const n = ist(now);\n  const today = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());\n  const nowStr = fmt(n);\n  const open = (rows || []).filter((r) => OPEN.includes(r.Status));\n  const next14 = open.filter((r) => { const m = parseWall(r['Move-in date']); return m && m >= today && m <= today + 14 * DAY; });\n  const overdue = open.filter((r) => r['Ready-by'] && String(r['Ready-by']).slice(0, 16) < nowStr);\n  const noDate = open.filter((r) => !parseWall(r['Move-in date']));\n  const oldest = open.filter((r) => parseWall(r['Received at']))\n    .sort((a, b) => parseWall(a['Received at']) - parseWall(b['Received at'])).slice(0, 3)\n    .map((r) => `- ${r.Tenant} (Wing ${r.Wing}), ${Math.floor((n - parseWall(r['Received at'])) / DAY)} days`);\n  return [\n    `Move-in review – ${nice(n)}`,\n    `Move-ins next 14 days: ${next14.length}`,\n    `Overdue (not Ready): ${overdue.length}`,\n    `No date – chase Sales: ${noDate.length}`,\n    ...(oldest.length ? ['Waiting longest:', ...oldest] : []),\n    `Full list: ${sheetUrl}`,\n  ].join('\\n');\n}\n\nif (typeof module !== 'undefined') module.exports = { fromLsq, isTrigger, readyBy, contactFor, buildTask, mondaySummary };\n\nconst lead = fromLsq($('LeadSquared – Lead stage changed').first().json.body);\nconst settings = $('Read Settings').all().map((i) => i.json);\nconst stage = (settings.find((s) => s.Role === 'Trigger stage') || {}).Name || 'Closed Won';\nif (!isTrigger(lead, stage)) return [];\nconst existing = lead.leadId ? ($('Read existing task').all().map((i) => i.json).find((r) => String(r['LSQ Lead ID']) === lead.leadId) || null) : null;\nconst t = buildTask(lead, new Date(), settings, existing);\nreturn [{ json: { ...t.row, _to: t.to || '', _text: t.text } }];"
+        "jsCode": "// Business rules for the CRM -> Ops move-in handoff.\n// Pure functions; the same text is inlined into the n8n Code nodes by build.js.\n// All times are IST wall-clock, held as \"fake UTC\" Dates (read with getUTC*), so host timezone never matters.\n\nconst DAY = 86400000;\nconst IST_MS = 330 * 60000;\nconst DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\nconst OPEN = ['Pending Move In', 'Not Ready'];\n\nconst ist = (d) => new Date(d.getTime() + IST_MS);\nconst pad = (n) => String(n).padStart(2, '0');\nconst fmt = (f) => `${f.getUTCFullYear()}-${pad(f.getUTCMonth() + 1)}-${pad(f.getUTCDate())} ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}`;\nconst nice = (f, time) => `${DOW[f.getUTCDay()]} ${f.getUTCDate()} ${MON[f.getUTCMonth()]}` + (time ? ` ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}` : '');\n// 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[...]' -> fake-UTC Date, or null\nfunction parseWall(s) {\n  const m = String(s || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{2}):(\\d{2}))?/);\n  return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0))) : null;\n}\n\n// Blank everywhere means '', 'NaN', 'N/A' or missing (same rule as the allotment cleaning).\nfunction clean(v) {\n  const s = v == null ? '' : String(v).trim();\n  return ['', 'nan', 'n/a'].includes(s.toLowerCase()) ? '' : s;\n}\n\nfunction toIsoDate(v) {\n  const s = clean(v);\n  let y, mo, d, m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];\n  else if ((m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/))) [y, mo, d] = [+m[3], +m[2], +m[1]]; // day-first, as proven on the allotment data\n  else return '';\n  const t = new Date(Date.UTC(y, mo - 1, d));\n  if (t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return ''; // 31/2 etc.: treat as missing, never roll over\n  return `${y}-${pad(mo)}-${pad(d)}`; // ponytail: unparseable date is treated as missing and flagged; add a separate \"bad date\" flag if LSQ ever sends one\n}\n\n// The ONLY place that knows LeadSquared field names. Capture one real webhook payload and adjust here.\nfunction fromLsq(body) {\n  const b = body || {};\n  const wing = clean(b.mx_Wing).match(/^([ab])\\b/i);\n  const room = clean(b.mx_Room).match(/^(?:r|room)\\s*(\\d+)$/i);\n  const g = clean(b.mx_Gender);\n  return {\n    leadId: clean(b.ProspectID),\n    tenant: [clean(b.FirstName), clean(b.LastName)].filter(Boolean).join(' '),\n    phone: clean(b.Phone),\n    gender: g ? g[0].toUpperCase() + g.slice(1).toLowerCase() : '',\n    wing: wing ? wing[1].toUpperCase() : clean(b.mx_Wing),\n    flat: clean(b.mx_Flat_No),\n    room: room ? 'R' + room[1] : clean(b.mx_Room),\n    bed: clean(b.mx_Bed),\n    category: clean(b.mx_Room_Category),\n    moveIn: toIsoDate(b.mx_Move_in_Date),\n    owner: clean(b.OwnerIdName),\n    stage: clean(b.ProspectStage),\n  };\n}\n\nfunction isTrigger(lead, stage) {\n  return lead.stage.toLowerCase() === String(stage || '').trim().toLowerCase();\n}\n\n// Founder's Fix rule: room Ready 2 working days (Mon-Fri) before move-in;\n// Sat/Sun/Mon move-ins by Friday 12:00; later requests for those get a Saturday 12:00 slot.\n// ponytail: public holidays ignored; add a Holidays tab if Ops asks.\nfunction readyBy(moveIn, receivedAt) {\n  const mv = parseWall(moveIn);\n  if (!mv) return { readyBy: '', flag: 'No date – chase Sales' };\n  const rcv = ist(receivedAt);\n  const dow = mv.getUTCDay();\n  if (dow === 6 || dow === 0 || dow === 1) {\n    const fri = new Date(mv.getTime() - { 6: 1, 0: 2, 1: 3 }[dow] * DAY + 12 * 3600000);\n    if (rcv <= fri) return { readyBy: fmt(fri), flag: '' };\n    const sat = new Date(fri.getTime() + DAY);\n    if (rcv <= sat) return { readyBy: fmt(sat), flag: 'Late request → Saturday slot' };\n    return { readyBy: fmt(fri), flag: 'Already late' };\n  }\n  let d = mv.getTime();\n  for (let n = 0; n < 2;) { d -= DAY; const w = new Date(d).getUTCDay(); if (w !== 0 && w !== 6) n++; }\n  const due = new Date(d + 18 * 3600000);\n  return { readyBy: fmt(due), flag: rcv <= due ? '' : 'Already late' };\n}\n\nfunction contactFor(wing, settings) {\n  const s = settings || [];\n  const reachable = (r) => clean(r.WhatsApp) || clean(r.Email);\n  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && reachable(r))\n    || s.find((r) => r.Role === 'Ops Head' && reachable(r));\n  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp), Email: clean(c.Email) } : null;\n}\n\nconst REQUIRED = [['leadId', 'lead id'], ['tenant', 'tenant name'], ['phone', 'phone'], ['wing', 'wing'], ['room', 'room'], ['bed', 'bed'], ['gender', 'gender'], ['moveIn', 'move-in date'], ['owner', 'sales owner']];\n\n// existing = the Ops Queue row already holding this lead, or null. An update keeps Ops' Status and the first arrival time.\nfunction buildTask(lead, receivedAt, settings, existing) {\n  const flags = [];\n  const missing = REQUIRED.filter(([k]) => !lead[k]).map(([, label]) => label);\n  if (missing.length) flags.push('Missing: ' + missing.join(', '));\n  // Lateness is judged from when Ops first heard of this move-in date, so a later CRM edit doesn't make it \"late\".\n  const first = existing && existing['Move-in date'] === lead.moveIn && parseWall(existing['Received at']);\n  const rb = readyBy(lead.moveIn, first ? new Date(first.getTime() - IST_MS) : receivedAt);\n  if (rb.flag) flags.push(rb.flag);\n  const c = contactFor(lead.wing, settings);\n  if (!c) flags.push(`No Ops contact for wing ${lead.wing || '?'}`);\n  const row = {\n    'Received at': (existing && existing['Received at']) || fmt(ist(receivedAt)), 'LSQ Lead ID': lead.leadId || `no-id-${receivedAt.getTime()}`, Tenant: lead.tenant, Phone: lead.phone,\n    Gender: lead.gender, Wing: lead.wing, Flat: lead.flat, Room: lead.room, Bed: lead.bed, 'Room Category': lead.category,\n    'Move-in date': lead.moveIn, 'Ready-by': rb.readyBy, 'Sales owner': lead.owner, Status: (existing && existing.Status) || 'Pending Move In', Flags: flags.join('; '),\n  };\n  const q = (v) => v || '?';\n  const mv = parseWall(lead.moveIn), due = parseWall(rb.readyBy);\n  const when = mv ? `Move-in ${nice(mv)}, room Ready by ${nice(due, true)}.` : 'Move-in date not set.';\n  let text = `New move-in: ${q(lead.tenant)} (${q(lead.gender)}), Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)}. ${when} Sales: ${q(lead.owner)}.`;\n  if (row.Flags) text = `⚠ ${row.Flags}. ${text}`;\n  let subject = `New move-in: ${q(lead.tenant)}, Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)} – ${mv ? `ready by ${nice(due, true)}` : 'no move-in date'}`;\n  if (row.Flags) subject = `⚠ ${subject}`;\n  if (existing) { text = `Updated: ${text}`; subject = `Updated: ${subject}`; }\n  return { row, to: (c && c.WhatsApp) || null, email: c ? c.Email : '', subject, text };\n}\n\n// Monday agenda for the 10-minute move-in review.\nfunction mondaySummary(rows, now, sheetUrl) {\n  const n = ist(now);\n  const today = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());\n  const nowStr = fmt(n);\n  const open = (rows || []).filter((r) => OPEN.includes(r.Status));\n  const next14 = open.filter((r) => { const m = parseWall(r['Move-in date']); return m && m >= today && m <= today + 14 * DAY; });\n  const overdue = open.filter((r) => r['Ready-by'] && String(r['Ready-by']).slice(0, 16) < nowStr);\n  const noDate = open.filter((r) => !parseWall(r['Move-in date']));\n  const oldest = open.filter((r) => parseWall(r['Received at']))\n    .sort((a, b) => parseWall(a['Received at']) - parseWall(b['Received at'])).slice(0, 3)\n    .map((r) => `- ${r.Tenant} (Wing ${r.Wing}), ${Math.floor((n - parseWall(r['Received at'])) / DAY)} days`);\n  return [\n    `Move-in review – ${nice(n)}`,\n    `Move-ins next 14 days: ${next14.length}`,\n    `Overdue (not Ready): ${overdue.length}`,\n    `No date – chase Sales: ${noDate.length}`,\n    ...(oldest.length ? ['Waiting longest:', ...oldest] : []),\n    `Full list: ${sheetUrl}`,\n  ].join('\\n');\n}\n\nif (typeof module !== 'undefined') module.exports = { fromLsq, isTrigger, readyBy, contactFor, buildTask, mondaySummary };\n\nconst lead = fromLsq($('LeadSquared – Lead stage changed').first().json.body);\nconst settings = $('Read Settings').all().map((i) => i.json);\nconst stage = (settings.find((s) => s.Role === 'Trigger stage') || {}).Name || 'Closed Won';\nif (!isTrigger(lead, stage)) return [];\nconst existing = lead.leadId ? ($('Read existing task').all().map((i) => i.json).find((r) => String(r['LSQ Lead ID']) === lead.leadId) || null) : null;\nconst t = buildTask(lead, new Date(), settings, existing);\nreturn [{ json: { ...t.row, _to: t.to || '', _email: t.email || '', _subject: t.subject, _text: t.text } }];"
       }
     },
     {
@@ -242,21 +242,57 @@
                 "operation": "notEmpty",
                 "singleValue": true
               }
+            },
+            {
+              "id": "c0ffee00-0000-4000-8000-000000000002",
+              "leftValue": "={{ $('Build Ops task').item.json._email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         },
         "options": {}
       }
     },
     {
       "id": "00000000-0000-4000-8000-000000000011",
+      "name": "Email – alert Ops",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        110
+      ],
+      "parameters": {
+        "sendTo": "={{ $('Build Ops task').item.json._email }}",
+        "subject": "={{ $('Build Ops task').item.json._subject }}",
+        "emailType": "text",
+        "message": "={{ $('Build Ops task').item.json._text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ulGmail000000001",
+          "name": "Gmail account"
+        }
+      },
+      "webhookId": "9e1a0000-0000-4000-8000-000000000011"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
       "name": "WhatsApp – alert Ops",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [
         1320,
-        -20
+        -120
       ],
       "parameters": {
         "operation": "send",
@@ -270,10 +306,11 @@
           "id": "ulWhatsApp000001",
           "name": "WhatsApp account"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
-      "id": "00000000-0000-4000-8000-000000000012",
+      "id": "00000000-0000-4000-8000-000000000013",
       "name": "Every 15 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -294,7 +331,7 @@
       "disabled": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000013",
+      "id": "00000000-0000-4000-8000-000000000014",
       "name": "LeadSquared – Fetch recently modified leads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -316,7 +353,7 @@
       "notes": "Host varies by account region; headers x-LSQ-AccessKey / x-LSQ-SecretKey via a Custom Auth credential."
     },
     {
-      "id": "00000000-0000-4000-8000-000000000014",
+      "id": "00000000-0000-4000-8000-000000000015",
       "name": "Monday 09:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -336,7 +373,7 @@
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000015",
+      "id": "00000000-0000-4000-8000-000000000016",
       "name": "Read Ops Queue",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
@@ -367,7 +404,7 @@
       "executeOnce": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000017",
       "name": "Read Settings (Monday)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
@@ -398,7 +435,7 @@
       "executeOnce": true
     },
     {
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000018",
       "name": "Build Monday summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -407,17 +444,43 @@
         900
       ],
       "parameters": {
-        "jsCode": "// Business rules for the CRM -> Ops move-in handoff.\n// Pure functions; the same text is inlined into the n8n Code nodes by build.js.\n// All times are IST wall-clock, held as \"fake UTC\" Dates (read with getUTC*), so host timezone never matters.\n\nconst DAY = 86400000;\nconst IST_MS = 330 * 60000;\nconst DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\nconst OPEN = ['Pending Move In', 'Not Ready'];\n\nconst ist = (d) => new Date(d.getTime() + IST_MS);\nconst pad = (n) => String(n).padStart(2, '0');\nconst fmt = (f) => `${f.getUTCFullYear()}-${pad(f.getUTCMonth() + 1)}-${pad(f.getUTCDate())} ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}`;\nconst nice = (f, time) => `${DOW[f.getUTCDay()]} ${f.getUTCDate()} ${MON[f.getUTCMonth()]}` + (time ? ` ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}` : '');\n// 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[...]' -> fake-UTC Date, or null\nfunction parseWall(s) {\n  const m = String(s || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{2}):(\\d{2}))?/);\n  return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0))) : null;\n}\n\n// Blank everywhere means '', 'NaN', 'N/A' or missing (same rule as the allotment cleaning).\nfunction clean(v) {\n  const s = v == null ? '' : String(v).trim();\n  return ['', 'nan', 'n/a'].includes(s.toLowerCase()) ? '' : s;\n}\n\nfunction toIsoDate(v) {\n  const s = clean(v);\n  let y, mo, d, m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];\n  else if ((m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/))) [y, mo, d] = [+m[3], +m[2], +m[1]]; // day-first, as proven on the allotment data\n  else return '';\n  const t = new Date(Date.UTC(y, mo - 1, d));\n  if (t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return ''; // 31/2 etc.: treat as missing, never roll over\n  return `${y}-${pad(mo)}-${pad(d)}`; // ponytail: unparseable date is treated as missing and flagged; add a separate \"bad date\" flag if LSQ ever sends one\n}\n\n// The ONLY place that knows LeadSquared field names. Capture one real webhook payload and adjust here.\nfunction fromLsq(body) {\n  const b = body || {};\n  const wing = clean(b.mx_Wing).match(/^([ab])\\b/i);\n  const room = clean(b.mx_Room).match(/^(?:r|room)\\s*(\\d+)$/i);\n  const g = clean(b.mx_Gender);\n  return {\n    leadId: clean(b.ProspectID),\n    tenant: [clean(b.FirstName), clean(b.LastName)].filter(Boolean).join(' '),\n    phone: clean(b.Phone),\n    gender: g ? g[0].toUpperCase() + g.slice(1).toLowerCase() : '',\n    wing: wing ? wing[1].toUpperCase() : clean(b.mx_Wing),\n    flat: clean(b.mx_Flat_No),\n    room: room ? 'R' + room[1] : clean(b.mx_Room),\n    bed: clean(b.mx_Bed),\n    category: clean(b.mx_Room_Category),\n    moveIn: toIsoDate(b.mx_Move_in_Date),\n    owner: clean(b.OwnerIdName),\n    stage: clean(b.ProspectStage),\n  };\n}\n\nfunction isTrigger(lead, stage) {\n  return lead.stage.toLowerCase() === String(stage || '').trim().toLowerCase();\n}\n\n// Founder's Fix rule: room Ready 2 working days (Mon-Fri) before move-in;\n// Sat/Sun/Mon move-ins by Friday 12:00; later requests for those get a Saturday 12:00 slot.\n// ponytail: public holidays ignored; add a Holidays tab if Ops asks.\nfunction readyBy(moveIn, receivedAt) {\n  const mv = parseWall(moveIn);\n  if (!mv) return { readyBy: '', flag: 'No date – chase Sales' };\n  const rcv = ist(receivedAt);\n  const dow = mv.getUTCDay();\n  if (dow === 6 || dow === 0 || dow === 1) {\n    const fri = new Date(mv.getTime() - { 6: 1, 0: 2, 1: 3 }[dow] * DAY + 12 * 3600000);\n    if (rcv <= fri) return { readyBy: fmt(fri), flag: '' };\n    const sat = new Date(fri.getTime() + DAY);\n    if (rcv <= sat) return { readyBy: fmt(sat), flag: 'Late request → Saturday slot' };\n    return { readyBy: fmt(fri), flag: 'Already late' };\n  }\n  let d = mv.getTime();\n  for (let n = 0; n < 2;) { d -= DAY; const w = new Date(d).getUTCDay(); if (w !== 0 && w !== 6) n++; }\n  const due = new Date(d + 18 * 3600000);\n  return { readyBy: fmt(due), flag: rcv <= due ? '' : 'Already late' };\n}\n\nfunction contactFor(wing, settings) {\n  const s = settings || [];\n  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && clean(r.WhatsApp))\n    || s.find((r) => r.Role === 'Ops Head' && clean(r.WhatsApp));\n  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp) } : null;\n}\n\nconst REQUIRED = [['leadId', 'lead id'], ['tenant', 'tenant name'], ['phone', 'phone'], ['wing', 'wing'], ['room', 'room'], ['bed', 'bed'], ['gender', 'gender'], ['moveIn', 'move-in date'], ['owner', 'sales owner']];\n\n// existing = the Ops Queue row already holding this lead, or null. An update keeps Ops' Status and the first arrival time.\nfunction buildTask(lead, receivedAt, settings, existing) {\n  const flags = [];\n  const missing = REQUIRED.filter(([k]) => !lead[k]).map(([, label]) => label);\n  if (missing.length) flags.push('Missing: ' + missing.join(', '));\n  // Lateness is judged from when Ops first heard of this move-in date, so a later CRM edit doesn't make it \"late\".\n  const first = existing && existing['Move-in date'] === lead.moveIn && parseWall(existing['Received at']);\n  const rb = readyBy(lead.moveIn, first ? new Date(first.getTime() - IST_MS) : receivedAt);\n  if (rb.flag) flags.push(rb.flag);\n  const c = contactFor(lead.wing, settings);\n  if (!c) flags.push(`No Ops contact for wing ${lead.wing || '?'}`);\n  const row = {\n    'Received at': (existing && existing['Received at']) || fmt(ist(receivedAt)), 'LSQ Lead ID': lead.leadId || `no-id-${receivedAt.getTime()}`, Tenant: lead.tenant, Phone: lead.phone,\n    Gender: lead.gender, Wing: lead.wing, Flat: lead.flat, Room: lead.room, Bed: lead.bed, 'Room Category': lead.category,\n    'Move-in date': lead.moveIn, 'Ready-by': rb.readyBy, 'Sales owner': lead.owner, Status: (existing && existing.Status) || 'Pending Move In', Flags: flags.join('; '),\n  };\n  const q = (v) => v || '?';\n  const mv = parseWall(lead.moveIn), due = parseWall(rb.readyBy);\n  const when = mv ? `Move-in ${nice(mv)}, room Ready by ${nice(due, true)}.` : 'Move-in date not set.';\n  let text = `New move-in: ${q(lead.tenant)} (${q(lead.gender)}), Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)}. ${when} Sales: ${q(lead.owner)}.`;\n  if (row.Flags) text = `⚠ ${row.Flags}. ${text}`;\n  if (existing) text = `Updated: ${text}`;\n  return { row, to: c ? c.WhatsApp : null, text };\n}\n\n// Monday agenda for the 10-minute move-in review.\nfunction mondaySummary(rows, now, sheetUrl) {\n  const n = ist(now);\n  const today = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());\n  const nowStr = fmt(n);\n  const open = (rows || []).filter((r) => OPEN.includes(r.Status));\n  const next14 = open.filter((r) => { const m = parseWall(r['Move-in date']); return m && m >= today && m <= today + 14 * DAY; });\n  const overdue = open.filter((r) => r['Ready-by'] && String(r['Ready-by']).slice(0, 16) < nowStr);\n  const noDate = open.filter((r) => !parseWall(r['Move-in date']));\n  const oldest = open.filter((r) => parseWall(r['Received at']))\n    .sort((a, b) => parseWall(a['Received at']) - parseWall(b['Received at'])).slice(0, 3)\n    .map((r) => `- ${r.Tenant} (Wing ${r.Wing}), ${Math.floor((n - parseWall(r['Received at'])) / DAY)} days`);\n  return [\n    `Move-in review – ${nice(n)}`,\n    `Move-ins next 14 days: ${next14.length}`,\n    `Overdue (not Ready): ${overdue.length}`,\n    `No date – chase Sales: ${noDate.length}`,\n    ...(oldest.length ? ['Waiting longest:', ...oldest] : []),\n    `Full list: ${sheetUrl}`,\n  ].join('\\n');\n}\n\nif (typeof module !== 'undefined') module.exports = { fromLsq, isTrigger, readyBy, contactFor, buildTask, mondaySummary };\n\nconst rows = $('Read Ops Queue').all().map((i) => i.json).filter((r) => r.Status);\nconst text = mondaySummary(rows, new Date(), 'https://docs.google.com/spreadsheets/d/REPLACE_WITH_SHEET_ID');\nreturn $('Read Settings (Monday)').all().map((i) => i.json)\n  .filter((s) => ['Wing Ops', 'Ops Head'].includes(s.Role) && String(s.WhatsApp || '').trim())\n  .map((s) => ({ json: { _to: String(s.WhatsApp).trim(), _text: text } }));"
+        "jsCode": "// Business rules for the CRM -> Ops move-in handoff.\n// Pure functions; the same text is inlined into the n8n Code nodes by build.js.\n// All times are IST wall-clock, held as \"fake UTC\" Dates (read with getUTC*), so host timezone never matters.\n\nconst DAY = 86400000;\nconst IST_MS = 330 * 60000;\nconst DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\nconst OPEN = ['Pending Move In', 'Not Ready'];\n\nconst ist = (d) => new Date(d.getTime() + IST_MS);\nconst pad = (n) => String(n).padStart(2, '0');\nconst fmt = (f) => `${f.getUTCFullYear()}-${pad(f.getUTCMonth() + 1)}-${pad(f.getUTCDate())} ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}`;\nconst nice = (f, time) => `${DOW[f.getUTCDay()]} ${f.getUTCDate()} ${MON[f.getUTCMonth()]}` + (time ? ` ${pad(f.getUTCHours())}:${pad(f.getUTCMinutes())}` : '');\n// 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[...]' -> fake-UTC Date, or null\nfunction parseWall(s) {\n  const m = String(s || '').match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{2}):(\\d{2}))?/);\n  return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0))) : null;\n}\n\n// Blank everywhere means '', 'NaN', 'N/A' or missing (same rule as the allotment cleaning).\nfunction clean(v) {\n  const s = v == null ? '' : String(v).trim();\n  return ['', 'nan', 'n/a'].includes(s.toLowerCase()) ? '' : s;\n}\n\nfunction toIsoDate(v) {\n  const s = clean(v);\n  let y, mo, d, m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];\n  else if ((m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/))) [y, mo, d] = [+m[3], +m[2], +m[1]]; // day-first, as proven on the allotment data\n  else return '';\n  const t = new Date(Date.UTC(y, mo - 1, d));\n  if (t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return ''; // 31/2 etc.: treat as missing, never roll over\n  return `${y}-${pad(mo)}-${pad(d)}`; // ponytail: unparseable date is treated as missing and flagged; add a separate \"bad date\" flag if LSQ ever sends one\n}\n\n// The ONLY place that knows LeadSquared field names. Capture one real webhook payload and adjust here.\nfunction fromLsq(body) {\n  const b = body || {};\n  const wing = clean(b.mx_Wing).match(/^([ab])\\b/i);\n  const room = clean(b.mx_Room).match(/^(?:r|room)\\s*(\\d+)$/i);\n  const g = clean(b.mx_Gender);\n  return {\n    leadId: clean(b.ProspectID),\n    tenant: [clean(b.FirstName), clean(b.LastName)].filter(Boolean).join(' '),\n    phone: clean(b.Phone),\n    gender: g ? g[0].toUpperCase() + g.slice(1).toLowerCase() : '',\n    wing: wing ? wing[1].toUpperCase() : clean(b.mx_Wing),\n    flat: clean(b.mx_Flat_No),\n    room: room ? 'R' + room[1] : clean(b.mx_Room),\n    bed: clean(b.mx_Bed),\n    category: clean(b.mx_Room_Category),\n    moveIn: toIsoDate(b.mx_Move_in_Date),\n    owner: clean(b.OwnerIdName),\n    stage: clean(b.ProspectStage),\n  };\n}\n\nfunction isTrigger(lead, stage) {\n  return lead.stage.toLowerCase() === String(stage || '').trim().toLowerCase();\n}\n\n// Founder's Fix rule: room Ready 2 working days (Mon-Fri) before move-in;\n// Sat/Sun/Mon move-ins by Friday 12:00; later requests for those get a Saturday 12:00 slot.\n// ponytail: public holidays ignored; add a Holidays tab if Ops asks.\nfunction readyBy(moveIn, receivedAt) {\n  const mv = parseWall(moveIn);\n  if (!mv) return { readyBy: '', flag: 'No date – chase Sales' };\n  const rcv = ist(receivedAt);\n  const dow = mv.getUTCDay();\n  if (dow === 6 || dow === 0 || dow === 1) {\n    const fri = new Date(mv.getTime() - { 6: 1, 0: 2, 1: 3 }[dow] * DAY + 12 * 3600000);\n    if (rcv <= fri) return { readyBy: fmt(fri), flag: '' };\n    const sat = new Date(fri.getTime() + DAY);\n    if (rcv <= sat) return { readyBy: fmt(sat), flag: 'Late request → Saturday slot' };\n    return { readyBy: fmt(fri), flag: 'Already late' };\n  }\n  let d = mv.getTime();\n  for (let n = 0; n < 2;) { d -= DAY; const w = new Date(d).getUTCDay(); if (w !== 0 && w !== 6) n++; }\n  const due = new Date(d + 18 * 3600000);\n  return { readyBy: fmt(due), flag: rcv <= due ? '' : 'Already late' };\n}\n\nfunction contactFor(wing, settings) {\n  const s = settings || [];\n  const reachable = (r) => clean(r.WhatsApp) || clean(r.Email);\n  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && reachable(r))\n    || s.find((r) => r.Role === 'Ops Head' && reachable(r));\n  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp), Email: clean(c.Email) } : null;\n}\n\nconst REQUIRED = [['leadId', 'lead id'], ['tenant', 'tenant name'], ['phone', 'phone'], ['wing', 'wing'], ['room', 'room'], ['bed', 'bed'], ['gender', 'gender'], ['moveIn', 'move-in date'], ['owner', 'sales owner']];\n\n// existing = the Ops Queue row already holding this lead, or null. An update keeps Ops' Status and the first arrival time.\nfunction buildTask(lead, receivedAt, settings, existing) {\n  const flags = [];\n  const missing = REQUIRED.filter(([k]) => !lead[k]).map(([, label]) => label);\n  if (missing.length) flags.push('Missing: ' + missing.join(', '));\n  // Lateness is judged from when Ops first heard of this move-in date, so a later CRM edit doesn't make it \"late\".\n  const first = existing && existing['Move-in date'] === lead.moveIn && parseWall(existing['Received at']);\n  const rb = readyBy(lead.moveIn, first ? new Date(first.getTime() - IST_MS) : receivedAt);\n  if (rb.flag) flags.push(rb.flag);\n  const c = contactFor(lead.wing, settings);\n  if (!c) flags.push(`No Ops contact for wing ${lead.wing || '?'}`);\n  const row = {\n    'Received at': (existing && existing['Received at']) || fmt(ist(receivedAt)), 'LSQ Lead ID': lead.leadId || `no-id-${receivedAt.getTime()}`, Tenant: lead.tenant, Phone: lead.phone,\n    Gender: lead.gender, Wing: lead.wing, Flat: lead.flat, Room: lead.room, Bed: lead.bed, 'Room Category': lead.category,\n    'Move-in date': lead.moveIn, 'Ready-by': rb.readyBy, 'Sales owner': lead.owner, Status: (existing && existing.Status) || 'Pending Move In', Flags: flags.join('; '),\n  };\n  const q = (v) => v || '?';\n  const mv = parseWall(lead.moveIn), due = parseWall(rb.readyBy);\n  const when = mv ? `Move-in ${nice(mv)}, room Ready by ${nice(due, true)}.` : 'Move-in date not set.';\n  let text = `New move-in: ${q(lead.tenant)} (${q(lead.gender)}), Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)}. ${when} Sales: ${q(lead.owner)}.`;\n  if (row.Flags) text = `⚠ ${row.Flags}. ${text}`;\n  let subject = `New move-in: ${q(lead.tenant)}, Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)} – ${mv ? `ready by ${nice(due, true)}` : 'no move-in date'}`;\n  if (row.Flags) subject = `⚠ ${subject}`;\n  if (existing) { text = `Updated: ${text}`; subject = `Updated: ${subject}`; }\n  return { row, to: (c && c.WhatsApp) || null, email: c ? c.Email : '', subject, text };\n}\n\n// Monday agenda for the 10-minute move-in review.\nfunction mondaySummary(rows, now, sheetUrl) {\n  const n = ist(now);\n  const today = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());\n  const nowStr = fmt(n);\n  const open = (rows || []).filter((r) => OPEN.includes(r.Status));\n  const next14 = open.filter((r) => { const m = parseWall(r['Move-in date']); return m && m >= today && m <= today + 14 * DAY; });\n  const overdue = open.filter((r) => r['Ready-by'] && String(r['Ready-by']).slice(0, 16) < nowStr);\n  const noDate = open.filter((r) => !parseWall(r['Move-in date']));\n  const oldest = open.filter((r) => parseWall(r['Received at']))\n    .sort((a, b) => parseWall(a['Received at']) - parseWall(b['Received at'])).slice(0, 3)\n    .map((r) => `- ${r.Tenant} (Wing ${r.Wing}), ${Math.floor((n - parseWall(r['Received at'])) / DAY)} days`);\n  return [\n    `Move-in review – ${nice(n)}`,\n    `Move-ins next 14 days: ${next14.length}`,\n    `Overdue (not Ready): ${overdue.length}`,\n    `No date – chase Sales: ${noDate.length}`,\n    ...(oldest.length ? ['Waiting longest:', ...oldest] : []),\n    `Full list: ${sheetUrl}`,\n  ].join('\\n');\n}\n\nif (typeof module !== 'undefined') module.exports = { fromLsq, isTrigger, readyBy, contactFor, buildTask, mondaySummary };\n\nconst rows = $('Read Ops Queue').all().map((i) => i.json).filter((r) => r.Status);\nconst text = mondaySummary(rows, new Date(), 'https://docs.google.com/spreadsheets/d/REPLACE_WITH_SHEET_ID');\nreturn $('Read Settings (Monday)').all().map((i) => i.json)\n  .filter((s) => ['Wing Ops', 'Ops Head'].includes(s.Role) && (String(s.WhatsApp || '').trim() || String(s.Email || '').trim()))\n  .map((s) => ({ json: { _to: String(s.WhatsApp || '').trim(), _email: String(s.Email || '').trim(), _subject: text.split('\\n')[0], _text: text } }))\n  .filter((m, i, all) => all.findIndex((x) => x._to === m._to && x._email === m._email) === i); // one message per person"
       }
     },
     {
-      "id": "00000000-0000-4000-8000-000000000018",
+      "id": "00000000-0000-4000-8000-000000000019",
+      "name": "Email – Monday summary",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        1020
+      ],
+      "parameters": {
+        "sendTo": "={{ $json._email }}",
+        "subject": "={{ $json._subject }}",
+        "emailType": "text",
+        "message": "={{ $json._text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ulGmail000000001",
+          "name": "Gmail account"
+        }
+      },
+      "webhookId": "9e1a0000-0000-4000-8000-000000000019"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000020",
       "name": "WhatsApp – Monday summary",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [
-        880,
-        900
+        900,
+        780
       ],
       "parameters": {
         "operation": "send",
@@ -431,7 +494,8 @@
           "id": "ulWhatsApp000001",
           "name": "WhatsApp account"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -497,6 +561,11 @@
             "node": "WhatsApp – alert Ops",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Email – alert Ops",
+            "type": "main",
+            "index": 0
           }
         ],
         []
@@ -551,6 +620,11 @@
         [
           {
             "node": "WhatsApp – Monday summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email – Monday summary",
             "type": "main",
             "index": 0
           }

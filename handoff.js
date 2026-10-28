@@ -84,9 +84,10 @@ function readyBy(moveIn, receivedAt) {
 
 function contactFor(wing, settings) {
   const s = settings || [];
-  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && clean(r.WhatsApp))
-    || s.find((r) => r.Role === 'Ops Head' && clean(r.WhatsApp));
-  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp) } : null;
+  const reachable = (r) => clean(r.WhatsApp) || clean(r.Email);
+  const c = s.find((r) => r.Role === 'Wing Ops' && String(r.Wing).trim().toUpperCase() === wing && reachable(r))
+    || s.find((r) => r.Role === 'Ops Head' && reachable(r));
+  return c ? { Name: c.Name, WhatsApp: clean(c.WhatsApp), Email: clean(c.Email) } : null;
 }
 
 const REQUIRED = [['leadId', 'lead id'], ['tenant', 'tenant name'], ['phone', 'phone'], ['wing', 'wing'], ['room', 'room'], ['bed', 'bed'], ['gender', 'gender'], ['moveIn', 'move-in date'], ['owner', 'sales owner']];
@@ -112,8 +113,10 @@ function buildTask(lead, receivedAt, settings, existing) {
   const when = mv ? `Move-in ${nice(mv)}, room Ready by ${nice(due, true)}.` : 'Move-in date not set.';
   let text = `New move-in: ${q(lead.tenant)} (${q(lead.gender)}), Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)}. ${when} Sales: ${q(lead.owner)}.`;
   if (row.Flags) text = `⚠ ${row.Flags}. ${text}`;
-  if (existing) text = `Updated: ${text}`;
-  return { row, to: c ? c.WhatsApp : null, text };
+  let subject = `New move-in: ${q(lead.tenant)}, Wing ${q(lead.wing)} ${q(lead.flat)} ${q(lead.room)} bed ${q(lead.bed)} – ${mv ? `ready by ${nice(due, true)}` : 'no move-in date'}`;
+  if (row.Flags) subject = `⚠ ${subject}`;
+  if (existing) { text = `Updated: ${text}`; subject = `Updated: ${subject}`; }
+  return { row, to: (c && c.WhatsApp) || null, email: c ? c.Email : '', subject, text };
 }
 
 // Monday agenda for the 10-minute move-in review.
