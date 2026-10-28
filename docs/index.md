@@ -4,6 +4,14 @@ A small n8n automation for a co-living operator. When Sales closes a booking in 
 within seconds (WhatsApp and email), with the date the room has to be ready. Every Monday morning there's a summary of what's coming
 up and what's overdue.
 
+## Watch it run (2 minutes)
+
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px">
+  <iframe src="https://cap.so/embed/tf0end6hd2p2b6p" title="CRM to Ops handoff, walkthrough" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="fullscreen" allowfullscreen loading="lazy"></iframe>
+</div>
+
+[Open the video on Cap](https://cap.so/s/tf0end6hd2p2b6p) if it doesn't play here.
+
 ## The problem
 
 An allotment tracker had **65 residents stuck before move-in**: 29 marked Pending Move In and 36 marked Not Ready.

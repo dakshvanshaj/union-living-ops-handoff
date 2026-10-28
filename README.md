@@ -5,6 +5,8 @@ with the date the room has to be ready. Every Monday at 09:00 IST, Ops gets a re
 
 **Docs:** https://dakshvanshaj.com/union-living-ops-handoff/
 
+**Video (2 min):** https://cap.so/s/tf0end6hd2p2b6p
+
 ![The workflow in n8n](docs/img/canvas.png)
 
 - [What it does and why](docs/index.md)
