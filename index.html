@@ -346,6 +346,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What Ops receives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-a-new-move-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. A new move-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-flagged-move-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A flagged move-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-an-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. An update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-the-monday-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The Monday review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -478,6 +528,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What Ops receives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-a-new-move-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. A new move-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-flagged-move-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A flagged move-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-an-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. An update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-the-monday-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The Monday review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -542,21 +642,21 @@ All 35 who had a move-in date were already past it, by 26 to 138 days.</p>
 <p>Ops closes the loop in the Sheet by changing Status: <code>Pending Move In → Ready → Moved In</code>. There's no new app to learn.</p>
 <p><img alt="The workflow in n8n" src="img/canvas.png" /></p>
 <h2 id="what-ops-receives">What Ops receives</h2>
-<div class="highlight"><pre><span></span><code>New move-in: Priya S (Girls), Wing A A-204 R1 bed 2. Move-in Tue 3 Nov, room Ready by Fri 30 Oct 18:00. Sales: Rohit K.
-</code></pre></div>
-<p>When something is missing, the alert says so first:</p>
-<div class="highlight"><pre><span></span><code>⚠ Missing: move-in date, sales owner; No date – chase Sales. New move-in: Aman R (Boys), Wing B B-110 R2 bed 1. Move-in date not set. Sales: ?.
-</code></pre></div>
-<p>Monday 09:00:</p>
-<div class="highlight"><pre><span></span><code>Move-in review – Mon 2 Nov
-Move-ins next 14 days: 1
-Overdue (not Ready): 1
-No date – chase Sales: 1
-Waiting longest:
-- Priya S (Wing A), 4 days
-- Aman R (Wing B), 4 days
-Full list: &lt;sheet link&gt;
-</code></pre></div>
+<p>Real emails produced by the workflow from the sample leads.</p>
+<h3 id="1-a-new-move-in">1. A new move-in</h3>
+<p>Sent the moment Sales marks the lead Closed Won. The date Ops works to is <strong>Room ready by</strong>.</p>
+<p><img alt="New move-in email" src="img/email-new.png" width="580" /></p>
+<h3 id="2-a-flagged-move-in">2. A flagged move-in</h3>
+<p>Sales left out the move-in date and owner. The task is still created, but the header turns orange,
+the problem is spelled out first, and missing fields show as <strong>not set</strong>, so Ops chases Sales instead of guessing.</p>
+<p><img alt="Flagged move-in email" src="img/email-flagged.png" width="580" /></p>
+<h3 id="3-an-update">3. An update</h3>
+<p>Sales edited the lead later. Ops hears about it, and their progress is kept: the room is still <strong>Ready</strong>.</p>
+<p><img alt="Updated move-in email" src="img/email-updated.png" width="580" /></p>
+<h3 id="4-the-monday-review">4. The Monday review</h3>
+<p>Every Monday at 09:00 IST: the agenda for the 10-minute move-in review.</p>
+<p><img alt="Monday review email" src="img/email-monday.png" width="580" /></p>
+<p>WhatsApp gets the same content as plain text.</p>
 <h2 id="status">Status</h2>
 <table>
 <thead>
@@ -576,7 +676,7 @@ Full list: &lt;sheet link&gt;
 </tr>
 <tr>
 <td>Email alerts + Google Sheet end-to-end</td>
-<td>Waiting on Google sign-in</td>
+<td>Working: tested on 28 Oct with a real Sheet and Gmail (new lead, repeat lead, missing fields, Closed Lost, Monday review)</td>
 </tr>
 <tr>
 <td>WhatsApp alerts</td>
