@@ -167,7 +167,7 @@ const tr = (k, v, strong) => `<tr><td style="padding:6px 10px 6px 0;color:#6b728
 function alertHtml(task, sheetUrl) {
   const r = task.row;
   const banner = r.Flags
-    ? `<div style="background:#fef3c7;border-left:4px solid #f59e0b;color:#92400e;padding:10px 12px;margin-bottom:14px;font-size:14px">⚠ ${esc(r.Flags)}</div>` : '';
+    ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;color:#92400e;padding:10px 12px;margin-bottom:14px;font-size:14px">⚠ ${esc(r.Flags)}</div>` : '';
   const bed = [r.Wing && `Wing ${r.Wing}`, r.Flat, r.Room, r.Bed && `bed ${r.Bed}`].filter(Boolean).map(esc).join(' · ');
   const body = banner + `<table style="border-collapse:collapse;width:100%">`
     + tr('Resident', esc([r.Tenant, r.Gender && `(${r.Gender})`].filter(Boolean).join(' ')), true)
