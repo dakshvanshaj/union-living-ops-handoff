@@ -37,28 +37,34 @@ Ops closes the loop in the Sheet by changing Status: `Pending Move In → Ready 
 
 ## What Ops receives
 
-```text
-New move-in: Priya S (Girls), Wing A A-204 R1 bed 2. Move-in Tue 3 Nov, room Ready by Fri 30 Oct 18:00. Sales: Rohit K.
-```
+Real emails produced by the workflow from the sample leads.
 
-When something is missing, the alert says so first:
+### 1. A new move-in
 
-```text
-⚠ Missing: move-in date, sales owner; No date – chase Sales. New move-in: Aman R (Boys), Wing B B-110 R2 bed 1. Move-in date not set. Sales: ?.
-```
+Sent the moment Sales marks the lead Closed Won. The date Ops works to is **Room ready by**.
 
-Monday 09:00:
+![New move-in email](img/email-new.png){ width="580" }
 
-```text
-Move-in review – Mon 2 Nov
-Move-ins next 14 days: 1
-Overdue (not Ready): 1
-No date – chase Sales: 1
-Waiting longest:
-- Priya S (Wing A), 4 days
-- Aman R (Wing B), 4 days
-Full list: <sheet link>
-```
+### 2. A flagged move-in
+
+Sales left out the move-in date and owner. The task is still created, but the header turns orange,
+the problem is spelled out first, and missing fields show as **not set**, so Ops chases Sales instead of guessing.
+
+![Flagged move-in email](img/email-flagged.png){ width="580" }
+
+### 3. An update
+
+Sales edited the lead later. Ops hears about it, and their progress is kept: the room is still **Ready**.
+
+![Updated move-in email](img/email-updated.png){ width="580" }
+
+### 4. The Monday review
+
+Every Monday at 09:00 IST: the agenda for the 10-minute move-in review.
+
+![Monday review email](img/email-monday.png){ width="580" }
+
+WhatsApp gets the same content as plain text.
 
 ## Status
 
@@ -66,7 +72,7 @@ Full list: <sheet link>
 |---|---|
 | Rules (Ready-by, flags, Monday summary) | Built and tested, in Node and inside n8n |
 | Workflow in n8n | Built, imported, webhook live with a secret header |
-| Email alerts + Google Sheet end-to-end | Waiting on Google sign-in |
+| Email alerts + Google Sheet end-to-end | Working: tested on 28 Oct with a real Sheet and Gmail (new lead, repeat lead, missing fields, Closed Lost, Monday review) |
 | WhatsApp alerts | Wired and switched on. Meta refuses sends until the WhatsApp account has billing set up, so a failed WhatsApp never stops the email |
 | Real LeadSquared connection | Sample payloads only. The field names are an assumption until one real payload is captured |
 

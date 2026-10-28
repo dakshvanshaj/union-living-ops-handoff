@@ -1,6 +1,6 @@
 // Run: node n8n-handoff/handoff.test.js
 const assert = require('node:assert/strict');
-const { fromLsq, isTrigger, readyBy, buildTask, mondaySummary } = require('./handoff.js');
+const { fromLsq, isTrigger, readyBy, buildTask, mondaySummary, alertHtml, summaryHtml } = require('./handoff.js');
 
 const R = (d, t = '2026-10-28T10:00:00+05:30') => readyBy(d, new Date(t));
 // working-day rule (received Wed 28 Oct 10:00 IST)
@@ -82,4 +82,16 @@ assert.equal(e.to, null); assert.equal(e.email, 'asha@example.com'); assert.equa
 assert.equal(e.subject, 'New move-in: Priya S, Wing A A-204 R1 bed 2 – ready by Fri 30 Oct 18:00');
 assert.equal(t.subject, '⚠ New move-in: Priya S, Wing A A-204 R1 bed 2 – no move-in date');
 assert.equal(ok.email, '');
+// HTML emails
+const h1 = alertHtml(ok, 'https://sheet');
+assert.match(h1, /New move-in/); assert.match(h1, /Fri 30 Oct 18:00/); assert.match(h1, /Tue 3 Nov/);
+assert.match(h1, /href="https:\/\/sheet"/); assert.doesNotMatch(h1, /Missing/);
+const h2 = alertHtml(t, 'https://sheet');
+assert.match(h2, /Missing: move-in date, sales owner/); assert.match(h2, /#fef3c7/); // warning banner
+assert.match(alertHtml(up, 'https://sheet'), /Updated/);
+const evil = buildTask(fromLsq({ ...base, FirstName: '<script>x</script>', LastName: '' }), now, S, null);
+assert.doesNotMatch(alertHtml(evil, 'https://sheet'), /<script>/); assert.match(alertHtml(evil, 'https://sheet'), /&lt;script&gt;/);
+const sh = summaryHtml(rows, new Date('2026-11-02T09:00:00+05:30'), 'https://sheet');
+assert.match(sh, /Move-in review/); assert.match(sh, /A1/); assert.match(sh, /C1/); assert.doesNotMatch(sh, /D1/);
+assert.match(sh, />1<\/div>/); // stat tiles show counts
 console.log('handoff ok');

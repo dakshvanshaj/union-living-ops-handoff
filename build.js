@@ -11,9 +11,9 @@ const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
 
 const doc = { __rl: true, mode: 'id', value: SHEET_ID };
 const tab = (name) => ({ __rl: true, mode: 'name', value: name });
-const sheetsCred = { googleSheetsOAuth2Api: { id: 'ulGoogleSheets01', name: 'Google Sheets account' } };
+const sheetsCred = { googleSheetsOAuth2Api: { id: process.env.GSHEETS_CRED_ID || 'ulGoogleSheets01', name: 'Google Sheets account' } };
 const waCred = { whatsAppApi: { id: 'ulWhatsApp000001', name: 'WhatsApp account' } };
-const gmailCred = { gmailOAuth2: { id: 'ulGmail000000001', name: 'Gmail account' } };
+const gmailCred = { gmailOAuth2: { id: process.env.GMAIL_CRED_ID || 'ulGmail000000001', name: 'Gmail account' } };
 let n = 0;
 const node = (name, type, typeVersion, position, parameters, extra = {}) =>
   ({ id: `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`, name, type: `n8n-nodes-base.${type}`, typeVersion, position, parameters, ...extra });
@@ -25,7 +25,7 @@ const whatsapp = (name, position, to, text) =>
   node(name, 'whatsApp', 1.1, position, { operation: 'send', phoneNumberId: WA_PHONE_ID, recipientPhoneNumber: to, textBody: text, additionalFields: {} }, { credentials: waCred, onError: 'continueRegularOutput' });
 // ponytail: WhatsApp is live but Meta refuses sends until the account has billing; continueRegularOutput keeps the run (and the email) going
 const gmail = (name, position, to, subject, text) =>
-  node(name, 'gmail', 2.1, position, { sendTo: to, subject, emailType: 'text', message: text, options: { appendAttribution: false } }, { credentials: gmailCred, webhookId: `9e1a0000-0000-4000-8000-${String(n + 1).padStart(12, '0')}` });
+  node(name, 'gmail', 2.1, position, { sendTo: to, subject, emailType: 'html', message: text, options: { appendAttribution: false } }, { credentials: gmailCred, webhookId: `9e1a0000-0000-4000-8000-${String(n + 1).padStart(12, '0')}` });
 
 const BUILD_TASK = `${LOGIC}
 const lead = fromLsq($('LeadSquared – Lead stage changed').first().json.body);
@@ -34,14 +34,15 @@ const stage = (settings.find((s) => s.Role === 'Trigger stage') || {}).Name || '
 if (!isTrigger(lead, stage)) return [];
 const existing = lead.leadId ? ($('Read existing task').all().map((i) => i.json).find((r) => String(r['LSQ Lead ID']) === lead.leadId) || null) : null;
 const t = buildTask(lead, new Date(), settings, existing);
-return [{ json: { ...t.row, _to: t.to || '', _email: t.email || '', _subject: t.subject, _text: t.text } }];`;
+return [{ json: { ...t.row, _to: t.to || '', _email: t.email || '', _subject: t.subject, _text: t.text, _html: alertHtml(t, '${SHEET_URL}') } }];`;
 
 const BUILD_SUMMARY = `${LOGIC}
 const rows = $('Read Ops Queue').all().map((i) => i.json).filter((r) => r.Status);
 const text = mondaySummary(rows, new Date(), '${SHEET_URL}');
+const html = summaryHtml(rows, new Date(), '${SHEET_URL}');
 return $('Read Settings (Monday)').all().map((i) => i.json)
   .filter((s) => ['Wing Ops', 'Ops Head'].includes(s.Role) && (String(s.WhatsApp || '').trim() || String(s.Email || '').trim()))
-  .map((s) => ({ json: { _to: String(s.WhatsApp || '').trim(), _email: String(s.Email || '').trim(), _subject: text.split('\\n')[0], _text: text } }))
+  .map((s) => ({ json: { _to: String(s.WhatsApp || '').trim(), _email: String(s.Email || '').trim(), _subject: text.split('\\n')[0], _text: text, _html: html } }))
   .filter((m, i, all) => all.findIndex((x) => x._to === m._to && x._email === m._email) === i); // one message per person`;
 
 const nodes = [
@@ -73,7 +74,7 @@ const nodes = [
     },
     options: {},
   }),
-  gmail('Email – alert Ops', [1320, 110], "={{ $('Build Ops task').item.json._email }}", "={{ $('Build Ops task').item.json._subject }}", "={{ $('Build Ops task').item.json._text }}"),
+  gmail('Email – alert Ops', [1320, 110], "={{ $('Build Ops task').item.json._email }}", "={{ $('Build Ops task').item.json._subject }}", "={{ $('Build Ops task').item.json._html }}"),
   whatsapp('WhatsApp – alert Ops', [1320, -120], "={{ $('Build Ops task').item.json._to }}", "={{ $('Build Ops task').item.json._text }}"),
 
   node('Every 15 min', 'scheduleTrigger', 1.2, [0, 400], { rule: { interval: [{ field: 'minutes', minutesInterval: 15 }] } }, { disabled: true }),
@@ -89,7 +90,7 @@ const nodes = [
   readRows('Read Ops Queue', 'Ops Queue', [220, 900]),
   readRows('Read Settings (Monday)', 'Settings', [440, 900]),
   node('Build Monday summary', 'code', 2, [660, 900], { jsCode: BUILD_SUMMARY }),
-  gmail('Email – Monday summary', [900, 1020], '={{ $json._email }}', '={{ $json._subject }}', '={{ $json._text }}'),
+  gmail('Email – Monday summary', [900, 1020], '={{ $json._email }}', '={{ $json._subject }}', '={{ $json._html }}'),
   whatsapp('WhatsApp – Monday summary', [900, 780], '={{ $json._to }}', '={{ $json._text }}'),
 ];
 
