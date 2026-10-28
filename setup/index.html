@@ -572,7 +572,7 @@
 <li>Format <code>Received at</code>, <code>Move-in date</code> and <code>Ready-by</code> as plain text (Format → Number → Plain text). Otherwise dates
   that Ops retypes won't count in the Monday summary.</li>
 </ul>
-<p><strong><code>Settings</code></strong>: headers <code>Role, Wing, Name, WhatsApp</code>:</p>
+<p><strong><code>Settings</code></strong>: headers <code>Role, Wing, Name, WhatsApp, Email</code>:</p>
 <table>
 <thead>
 <tr>
@@ -580,6 +580,7 @@
 <th>Wing</th>
 <th>Name</th>
 <th>WhatsApp</th>
+<th>Email</th>
 </tr>
 </thead>
 <tbody>
@@ -588,24 +589,28 @@
 <td></td>
 <td>Closed Won</td>
 <td></td>
+<td></td>
 </tr>
 <tr>
 <td>Wing Ops</td>
 <td>A</td>
 <td><em>name</em></td>
 <td><em>number</em></td>
+<td><em>email</em></td>
 </tr>
 <tr>
 <td>Wing Ops</td>
 <td>B</td>
 <td><em>name</em></td>
 <td><em>number</em></td>
+<td><em>email</em></td>
 </tr>
 <tr>
 <td>Ops Head</td>
 <td></td>
 <td><em>name</em></td>
 <td><em>number</em></td>
+<td><em>email</em></td>
 </tr>
 </tbody>
 </table>
@@ -616,7 +621,7 @@
 </ul>
 <h2 id="3-credentials-in-n8n">3. Credentials in n8n</h2>
 <ul>
-<li><strong>Google Sheets OAuth2:</strong></li>
+<li><strong>Google Sheets OAuth2 and Gmail OAuth2</strong> (one OAuth client covers both; enable the Sheets, Drive and Gmail APIs):</li>
 <li>In Google Cloud, create an OAuth client with redirect URI <code>http://localhost:5678/rest/oauth2-credential/callback</code>.</li>
 <li>Add the credential in n8n and sign in.</li>
 <li><strong>WhatsApp:</strong></li>

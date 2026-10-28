@@ -589,7 +589,8 @@
   B --&gt;|yes| Q[Ops Queue sheet&lt;br/&gt;add or update]
   Q --&gt; C{Ops contact?}
   C --&gt;|yes| W[WhatsApp alert]
-  M[Monday 09:00] --&gt; R[Read Ops Queue] --&gt; RS[Read Settings] --&gt; SUM[Build summary] --&gt; W2[WhatsApp to each contact]</code></pre>
+  C --&gt;|yes| G[Email alert]
+  M[Monday 09:00] --&gt; R[Read Ops Queue] --&gt; RS[Read Settings] --&gt; SUM[Build summary] --&gt; W2[WhatsApp + email to each contact]</code></pre>
 <p>All the business rules live in one file, <code>handoff.js</code>. <code>build.js</code> copies it into the workflow's Code nodes, so the
 rules that are tested are the same ones that run.</p>
 <h2 id="ready-by-rule">Ready-by rule</h2>
@@ -689,7 +690,8 @@ day-first (Indian format).</p>
 <li>Every lead is invented. <code>send-test.sh</code> posts a LeadSquared-shaped lead.</li>
 <li>The LeadSquared field names (<code>ProspectID</code>, <code>mx_Wing</code>, <code>mx_Move_in_Date</code>, ...) are an assumption. To go live,
     capture one real webhook payload and change <code>fromLsq()</code> in <code>handoff.js</code>. It's the only place that knows those names.</li>
-<li>WhatsApp uses Meta's free test number. In production it would go through a WhatsApp provider such as WATI
+<li>WhatsApp uses Meta's free test number. Meta currently refuses sends until the account has billing set up, so email carries the demo; each WhatsApp step is set to continue on error.
+    Settings has an <code>Email</code> column; a contact needs a WhatsApp number or an email. In production it would go through a WhatsApp provider such as WATI
     (<code>n8n-nodes-wati</code>, Send Template Message) with an approved message template.</li>
 </ul>
 <h2 id="files">Files</h2>

@@ -513,7 +513,7 @@
 
 <h1 id="crm-ops-move-in-handoff">CRM → Ops move-in handoff</h1>
 <p>A small n8n automation for a co-living operator. When Sales closes a booking in LeadSquared, Ops hears about it
-within seconds, with the date the room has to be ready. Every Monday morning there's a summary of what's coming
+within seconds (WhatsApp and email), with the date the room has to be ready. Every Monday morning there's a summary of what's coming
 up and what's overdue.</p>
 <h2 id="the-problem">The problem</h2>
 <p>An allotment tracker had <strong>65 residents stuck before move-in</strong>: 29 marked Pending Move In and 36 marked Not Ready.
@@ -536,7 +536,7 @@ All 35 who had a move-in date were already past it, by 26 to 138 days.</p>
 <li>The workflow checks what Ops needs (bed, move-in date, gender, sales owner, phone) and flags anything missing in plain words.</li>
 <li>It works out <strong>Ready-by</strong>, the time the room must be ready (<a href="how-it-works/#ready-by-rule">rules</a>).</li>
 <li>It adds the task to the <strong>Ops Queue</strong> Google Sheet, or updates it if the same lead comes in again.</li>
-<li>It sends a WhatsApp to that wing's Ops contact.</li>
+<li>It alerts that wing's Ops contact on WhatsApp and by email.</li>
 <li><strong>Every Monday at 09:00 IST</strong>, everyone listed gets the move-in review.</li>
 </ol>
 <p>Ops closes the loop in the Sheet by changing Status: <code>Pending Move In → Ready → Moved In</code>. There's no new app to learn.</p>
@@ -575,8 +575,12 @@ Full list: &lt;sheet link&gt;
 <td>Built, imported, webhook live with a secret header</td>
 </tr>
 <tr>
-<td>Google Sheet + WhatsApp end-to-end</td>
-<td>Waiting on account setup</td>
+<td>Email alerts + Google Sheet end-to-end</td>
+<td>Waiting on Google sign-in</td>
+</tr>
+<tr>
+<td>WhatsApp alerts</td>
+<td>Wired and switched on. Meta refuses sends until the WhatsApp account has billing set up, so a failed WhatsApp never stops the email</td>
 </tr>
 <tr>
 <td>Real LeadSquared connection</td>
